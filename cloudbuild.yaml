@@ -1,0 +1,46 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/invoice-parser:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/invoice-parser:latest'
+      - '.'
+
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'push'
+      - '--all-tags'
+      - 'gcr.io/$PROJECT_ID/invoice-parser'
+
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'invoice-parser'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/invoice-parser:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '300'
+      - '--max-instances'
+      - '10'
+      - '--set-env-vars'
+      - 'PROJECT_ID=$PROJECT_ID,BUCKET_NAME=invoice-parsing-bucket,PROCESSOR_ID=86f1d13896882e30,PROCESSOR_LOCATION=us,SERVICE_ACCOUNT_EMAIL=invoice-parser-sa@sis-sandbox-463113.iam.gserviceaccount.com'
+
+images:
+  - 'gcr.io/$PROJECT_ID/invoice-parser:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/invoice-parser:latest'
