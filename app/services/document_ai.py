@@ -19,7 +19,7 @@ class DocumentAIService:
     def __init__(self):
         self.project_id = settings.PROJECT_ID
         self.location = settings.PROCESSOR_LOCATION
-        self.processor_id = settings.PROCESSOR_ID
+        self.processor_id = settings.INVOICE_PROCESSOR_ID or settings.PROCESSOR_ID
         self.client: Optional[documentai.DocumentProcessorServiceClient] = None
         self.executor = ThreadPoolExecutor(max_workers=3)
         

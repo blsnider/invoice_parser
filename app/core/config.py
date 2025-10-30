@@ -8,10 +8,19 @@ import os
 class Settings(BaseSettings):
     PROJECT_ID: str = Field(..., description="Google Cloud Project ID")
     BUCKET_NAME: str = Field(..., description="GCS bucket for storage")
-    
-    PROCESSOR_ID: Optional[str] = Field(None, description="Document AI processor ID")
+
+    # Invoice parser configuration
+    INVOICE_PROCESSOR_ID: Optional[str] = Field(None, description="Invoice Document AI processor ID")
+
+    # BOL parser configuration
+    BOL_PROCESSOR_ID: Optional[str] = Field(default="9658341f939fd24e", description="BOL Document AI processor ID")
+
+    # Shared processor settings
     PROCESSOR_LOCATION: str = Field(default="us", description="Document AI processor location")
     PROCESSOR_VERSION: Optional[str] = Field(None, description="Document AI processor version")
+
+    # Legacy support (maps to INVOICE_PROCESSOR_ID)
+    PROCESSOR_ID: Optional[str] = Field(None, description="Legacy: Document AI processor ID")
     
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = Field(
         default=None,
@@ -56,7 +65,11 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    # Legacy support: map PROCESSOR_ID to INVOICE_PROCESSOR_ID if not set
+    if settings.PROCESSOR_ID and not settings.INVOICE_PROCESSOR_ID:
+        settings.INVOICE_PROCESSOR_ID = settings.PROCESSOR_ID
+    return settings
 
 
 settings = get_settings()

@@ -71,13 +71,14 @@ class StorageService:
     async def upload_file(
         self,
         file_content: bytes,
+        document_id: str,
         file_name: str,
         content_type: str = "application/pdf",
         metadata: Optional[Dict[str, Any]] = None,
+        folder: str = "invoices"
     ) -> str:
         try:
-            invoice_id = str(uuid.uuid4())
-            blob_name = f"invoices/{invoice_id}/{file_name}"
+            blob_name = f"{folder}/{document_id}/{file_name}"
 
             loop = asyncio.get_event_loop()
             blob_path = await loop.run_in_executor(
@@ -90,7 +91,7 @@ class StorageService:
             )
 
             logger.info(f"File uploaded successfully: {blob_path}")
-            return invoice_id
+            return document_id
 
         except Exception as e:
             logger.error(f"Failed to upload file: {e}")
@@ -109,9 +110,9 @@ class StorageService:
         blob.upload_from_string(content, content_type=content_type)
         return blob.name
 
-    async def download_file(self, invoice_id: str, file_name: str) -> bytes:
+    async def download_file(self, document_id: str, file_name: str, folder: str = "invoices") -> bytes:
         try:
-            blob_name = f"invoices/{invoice_id}/{file_name}"
+            blob_name = f"{folder}/{document_id}/{file_name}"
 
             loop = asyncio.get_event_loop()
             content = await loop.run_in_executor(
@@ -123,7 +124,7 @@ class StorageService:
 
         except NotFound:
             logger.error(f"File not found: {blob_name}")
-            raise StorageError(f"File not found: {invoice_id}/{file_name}")
+            raise StorageError(f"File not found: {document_id}/{file_name}")
         except Exception as e:
             logger.error(f"Failed to download file: {e}")
             raise StorageError(f"File download failed: {str(e)}")
@@ -132,9 +133,9 @@ class StorageService:
         blob = self.bucket.blob(blob_name)
         return blob.download_as_bytes()
 
-    async def save_parsed_data(self, invoice_id: str, data: Dict[str, Any]) -> str:
+    async def save_parsed_data(self, document_id: str, data: Dict[str, Any], folder: str = "parsed") -> str:
         try:
-            blob_name = f"parsed/{invoice_id}/data.json"
+            blob_name = f"{folder}/{document_id}/data.json"
             json_content = dumps_invoice_data(data).encode("utf-8")
 
             loop = asyncio.get_event_loop()
@@ -144,7 +145,7 @@ class StorageService:
                 json_content,
                 blob_name,
                 "application/json",
-                {"invoice_id": invoice_id, "type": "parsed_data"},
+                {"document_id": document_id, "type": "parsed_data"},
             )
 
             logger.info(f"Parsed data saved: {blob_path}")
@@ -154,9 +155,9 @@ class StorageService:
             logger.error(f"Failed to save parsed data: {e}")
             raise StorageError(f"Failed to save parsed data: {str(e)}")
 
-    async def get_parsed_data(self, invoice_id: str) -> Dict[str, Any]:
+    async def get_parsed_data(self, document_id: str, folder: str = "parsed") -> Dict[str, Any]:
         try:
-            blob_name = f"parsed/{invoice_id}/data.json"
+            blob_name = f"{folder}/{document_id}/data.json"
 
             loop = asyncio.get_event_loop()
             content = await loop.run_in_executor(
@@ -167,20 +168,21 @@ class StorageService:
             return json.loads(content)
 
         except NotFound:
-            logger.error(f"Parsed data not found for invoice: {invoice_id}")
-            raise StorageError(f"Parsed data not found: {invoice_id}")
+            logger.error(f"Parsed data not found for document: {document_id}")
+            raise StorageError(f"Parsed data not found: {document_id}")
         except Exception as e:
             logger.error(f"Failed to get parsed data: {e}")
             raise StorageError(f"Failed to retrieve parsed data: {str(e)}")
 
     async def generate_signed_url(
         self,
-        invoice_id: str,
+        document_id: str,
         file_name: str,
         expiration: int = None,
+        folder: str = "invoices"
     ) -> str:
         try:
-            blob_name = f"invoices/{invoice_id}/{file_name}"
+            blob_name = f"{folder}/{document_id}/{file_name}"
             expiration = expiration or settings.SIGNED_URL_EXPIRATION
 
             loop = asyncio.get_event_loop()
@@ -300,6 +302,46 @@ class StorageService:
         for blob in blobs:
             blob.delete()
             logger.debug(f"Deleted blob: {blob.name}")
+
+    async def list_bols(self, prefix: Optional[str] = None) -> list:
+        try:
+            prefix = prefix or "bols/"
+
+            loop = asyncio.get_event_loop()
+            blobs = await loop.run_in_executor(
+                self.executor,
+                self._list_blobs,
+                prefix,
+            )
+            return blobs
+
+        except Exception as e:
+            logger.error(f"Failed to list BOLs: {e}")
+            raise StorageError(f"Failed to list BOLs: {str(e)}")
+
+    async def delete_bol(self, bol_id: str):
+        try:
+            prefix = f"bols/{bol_id}/"
+
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                self.executor,
+                self._delete_blobs,
+                prefix,
+            )
+
+            parsed_prefix = f"parsed_bol/{bol_id}/"
+            await loop.run_in_executor(
+                self.executor,
+                self._delete_blobs,
+                parsed_prefix,
+            )
+
+            logger.info(f"BOL {bol_id} deleted successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to delete BOL: {e}")
+            raise StorageError(f"Failed to delete BOL: {str(e)}")
 
 
 storage_service = StorageService()

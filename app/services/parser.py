@@ -34,12 +34,18 @@ class InvoiceParser:
                 self.document_ai.initialize()
             
             logger.info(f"Starting invoice parsing for file: {file_name}")
-            
-            invoice_id = await self.storage.upload_file(
+
+            # Generate invoice ID
+            import uuid
+            invoice_id = str(uuid.uuid4())
+
+            await self.storage.upload_file(
                 file_content,
+                invoice_id,
                 file_name,
                 content_type,
-                metadata
+                metadata,
+                folder="invoices"
             )
             logger.info(f"File uploaded with invoice ID: {invoice_id}")
             
